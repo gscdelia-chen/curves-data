@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Curves 運動紀錄</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'PingFang TC', sans-serif;
+      background: #f5f4f0;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 0 0 3rem;
+    }
+    .page-header {
+      background: #fff;
+      border-bottom: 1px solid #e5e3dc;
+      padding: 1.25rem 2rem 0;
+      margin-bottom: 1.5rem;
+    }
+    .page-header-top { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .page-header h1 { font-size: 22px; font-weight: 500; color: #1a1a1a; }
+    .page-header p { font-size: 13px; color: #888; }
+
+    .time-filter { display: flex; gap: 0; }
+    .time-btn {
+      font-size: 13px; padding: 10px 18px;
+      border: none; border-bottom: 2px solid transparent;
+      background: transparent; color: #888;
+      cursor: pointer; font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .time-btn:hover { color: #1a1a1a; }
+    .time-btn.active { color: #1a1a1a; border-bottom-color: #1a1a1a; font-weight: 500; }
+
+    .container { max-width: 860px; margin: 0 auto; padding: 0 1.25rem; }
+
+    /* 載入中 / 錯誤畫面 */
+    .loading-wrap {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 40vh; gap: 16px; color: #888; font-size: 14px;
+    }
+    .spinner {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 3px solid #e5e3dc; border-top-color: #1D9E75;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box {
+      background: #fff8f8; border: 0.5px solid #f7c1c1;
+      border-radius: 10px; padding: 1.5rem; color: #a32d2d;
+      font-size: 13px; text-align: center; max-width: 480px; margin: 0 auto;
+    }
+    .retry-btn {
+      margin-top: 12px; padding: 7px 18px; border-radius: 20px;
+      border: 0.5px solid #a32d2d; background: transparent;
+      color: #a32d2d; cursor: pointer; font-family: inherit; font-size: 13px;
+    }
+    .retry-btn:hover { background: #fdf0f0; }
+
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px; margin-bottom: 1.5rem;
+    }
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .time-btn { padding: 10px 12px; font-size: 12px; }
+    }
+    .stat-card { background: #fff; border-radius: 10px; border: 0.5px solid #e5e3dc; padding: 14px 16px; }
+    .stat-label { font-size: 12px; color: #888; margin-bottom: 6px; }
+    .stat-value { font-size: 22px; font-weight: 500; color: #1a1a1a; }
+    .stat-sub { font-size: 11px; color: #aaa; margin-top: 3px; }
+
+    .card { background: #fff; border-radius: 12px; border: 0.5px solid #e5e3dc; padding: 1.25rem; margin-bottom: 1.25rem; }
+    .section-title { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 14px; }
+    .chart-wrap { position: relative; width: 100%; }
+
+    .tab-row { display: flex; gap: 6px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tab-btn {
+      font-size: 12px; padding: 5px 12px; border-radius: 20px;
+      border: 0.5px solid #ccc; background: transparent; color: #666;
+      cursor: pointer; transition: all 0.15s; font-family: inherit;
+    }
+    .tab-btn:hover { background: #f5f4f0; }
+    .tab-btn.active { background: #f0ede6; color: #1a1a1a; border-color: #999; font-weight: 500; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 1rem; font-size: 12px; color: #666; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    .machine-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    @media (max-width: 480px) { .machine-grid { grid-template-columns: 1fr; } }
+    .machine-card { background: #fff; border: 0.5px solid #e5e3dc; border-radius: 10px; padding: 14px; }
+    .machine-name { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .machine-dots { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+    .dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 500; flex-shrink: 0;
+    }
+    .dot-5 { background: #C0DD97; color: #27500A; }
+    .dot-4 { background: #B5D4F4; color: #0C447C; }
+    .dot-3 { background: #FAC775; color: #633806; }
+    .dot-2 { background: #F7C1C1; color: #791F1F; }
+    .machine-avg { font-size: 11px; color: #aaa; }
+    .machine-avg span { font-weight: 500; color: #666; }
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #aaa; font-size: 14px; grid-column: 1 / -1; }
+
+    #main-content { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <div style="max-width: 860px; margin: 0 auto;">
+    <div class="page-header-top">
+      <h1>Curves 運動紀錄</h1>
+      <p id="header-sub"></p>
+    </div>
+    <div class="time-filter" id="time-filter">
+      <button class="time-btn active" data-period="all">完整資料</button>
+      <button class="time-btn" data-period="year">本年度</button>
+      <button class="time-btn" data-period="month">本月</button>
+      <button class="time-btn" data-period="week">本週</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- 載入中 -->
+  <div id="loading-state" class="loading-wrap">
+    <div class="spinner"></div>
+    <span>正在從 Google 試算表載入資料…</span>
+  </div>
+
+  <!-- 錯誤 -->
+  <div id="error-state" style="display:none; padding: 2rem 0;">
+    <div class="error-box">
+      <div style="font-weight:500; margin-bottom:8px;">無法載入資料</div>
+      <div id="error-msg">請確認試算表已設為「知道連結的任何人可檢視」</div>
+      <button class="retry-btn" onclick="loadData()">重新載入</button>
+    </div>
+  </div>
+
+  <!-- 主內容 -->
+  <div id="main-content">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">訓練次數</div>
+        <div class="stat-value" id="stat-count">–</div>
+        <div class="stat-sub" id="stat-range">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">平均動作確實度</div>
+        <div class="stat-value" id="avg-accuracy">–</div>
+        <div class="stat-sub" id="stat-acc-sub">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">最佳器材</div>
+        <div class="stat-value" id="best-machine">–</div>
+        <div class="stat-sub">平均最高分</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">最需加強</div>
+        <div class="stat-value" id="worst-machine">–</div>
+        <div class="stat-sub">平均最低分</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">平均動作確實度趨勢</div>
+      <div class="chart-wrap" style="height: 160px;"><canvas id="accuracyChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">各器材歷次表現</div>
+      <div class="tab-row" id="machine-tabs"></div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:#27500A;"></span>5 優秀</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#185FA5;"></span>4 良好</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#BA7517;"></span>3 中等</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#A32D2D;"></span>2 待改進</span>
+      </div>
+      <div class="chart-wrap" style="height: 220px;"><canvas id="machineChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">各器材平均分數總覽</div>
+      <div class="chart-wrap" style="height: 380px;"><canvas id="overviewChart"></canvas></div>
+    </div>
+
+    <div class="section-title" style="padding: 0 0 10px;">每次訓練器材表現</div>
+    <div class="machine-grid" id="machine-grid"></div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ── 設定 ──────────────────────────────────────────────────────
+const SHEET_ID  = '1HdoK1_ZBj_VETEGU6_Bx-hG1oNbvtdIP05flTmJowxU';
+const CSV_URL   = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+
+const MACHINES  = [
+  '腿部蹲舉機','腰部側屈機','髖內收外展機','手臂屈伸機','大腿屈伸機','胸背推拉機',
+  '腹背屈伸機','肩背推拉機','腿部推蹬機','軀體旋轉機','臀腿後踢機','胸肩前後機'
+];
+const SCORE_BG    = { 5:'#C0DD97', 4:'#B5D4F4', 3:'#FAC775', 2:'#F7C1C1' };
+const SCORE_COLOR = { 5:'#27500A', 4:'#185FA5', 3:'#BA7517', 2:'#A32D2D' };
+const PERIOD_LABEL = { all:'完整資料', year:'本年度', month:'本月', week:'本週' };
+
+let ALL_DATA = [];
+let currentPeriod = 'all';
+let selectedMachine = 0;
+let accChart, machChart, ovChart;
+
+// ── CSV 解析 ──────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n').map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')));
+  // 第一行是標題，跳過；從第二行（index 1）開始讀
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i];
+    // 欄位：A=紀錄時間, B=運動日期, C~N=12台器材, O=平均動作確實度
+    const dateStr = cols[1]; // 運動日期 YYYY-MM-DD
+    if (!dateStr || !dateStr.match(/^\d{4}-\d{2}-\d{2}/)) continue;
+    const date = dateStr.substring(0, 10);
+
+    const scores = [];
+    for (let c = 2; c <= 13; c++) {
+      const v = parseInt(cols[c]);
+      if (isNaN(v)) break;
+      scores.push(v);
+    }
+    if (scores.length !== 12) continue;
+
+    // 確實度：可能是 "50%", "41.70%", "75%" 等格式
+    const accRaw = cols[14] || '';
+    const accVal = parseFloat(accRaw.replace('%', ''));
+    const accuracy = isNaN(accVal) ? 0 : accVal;
+
+    rows.push({ date, accuracy, scores });
+  }
+  // 依運動日期排序（舊 → 新）
+  rows.sort((a, b) => a.date.localeCompare(b.date));
+  return rows;
+}
+
+// ── 資料載入 ──────────────────────────────────────────────────
+async function loadData() {
+  document.getElementById('loading-state').style.display = 'flex';
+  document.getElementById('error-state').style.display   = 'none';
+  document.getElementById('main-content').style.display  = 'none';
+
+  try {
+    const res = await fetch(CSV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    ALL_DATA = parseCSV(text);
+    if (!ALL_DATA.length) throw new Error('試算表內沒有可讀取的資料，請確認格式正確');
+
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('main-content').style.display  = 'block';
+    render(currentPeriod);
+  } catch (err) {
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('error-state').style.display   = 'block';
+    document.getElementById('error-msg').textContent = err.message;
+  }
+}
+
+// ── 時間篩選 ──────────────────────────────────────────────────
+function getWeekBounds() {
+  const now = new Date(), day = now.getDay();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  mon.setHours(0,0,0,0);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  sun.setHours(23,59,59,999);
+  return [mon, sun];
+}
+
+function filterData(period) {
+  const now = new Date();
+  if (period === 'all')  return ALL_DATA;
+  if (period === 'year') return ALL_DATA.filter(d => new Date(d.date).getFullYear() === now.getFullYear());
+  if (period === 'month') return ALL_DATA.filter(d => {
+    const dt = new Date(d.date);
+    return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+  });
+  if (period === 'week') {
+    const [mon, sun] = getWeekBounds();
+    return ALL_DATA.filter(d => { const dt = new Date(d.date); return dt >= mon && dt <= sun; });
+  }
+  return ALL_DATA;
+}
+
+function fmtShort(dateStr) {
+  const d = new Date(dateStr);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// ── 圖表 ──────────────────────────────────────────────────────
+function buildAccuracyChart(data) {
+  const ctx = document.getElementById('accuracyChart');
+  if (accChart) accChart.destroy();
+  if (!data.length) return;
+  const vals = data.map(d => d.accuracy);
+  const minY = Math.max(0,   Math.min(...vals) - 10);
+  const maxY = Math.min(100, Math.max(...vals) + 10);
+  accChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(d => fmtShort(d.date)),
+      datasets: [{
+        data: vals,
+        borderColor: '#1D9E75', backgroundColor: 'rgba(29,158,117,0.08)',
+        borderWidth: 2, pointBackgroundColor: '#1D9E75',
+        pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.35
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: c => c.parsed.y.toFixed(1)+'%' } } },
+      scales: {
+        y: { min:minY, max:maxY, ticks:{callback:v=>v+'%', font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} },
+        x: { ticks:{font:{size:11}, autoSkip:false, maxRotation:45}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function buildMachineChart(data) {
+  const ctx = document.getElementById('machineChart');
+  if (machChart) machChart.destroy();
+  if (!data.length) return;
+  machChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: data.map(d => fmtShort(d.date)),
+      datasets: [{
+        data: data.map(d => d.scores[selectedMachine]),
+        backgroundColor: data.map(d => SCORE_BG[d.scores[selectedMachine]]),
+        borderColor:     data.map(d => SCORE_COLOR[d.scores[selectedMachine]]),
+        borderWidth: 1.5, borderRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false} },
+      scales: {
+        y: {
+          min:1, max:5.5,
+          ticks:{ stepSize:1, callback:v=>({2:'待改進',3:'中等',4:'良好',5:'優秀'}[v]||''), font:{size:11} },
+          grid:{color:'rgba(0,0,0,0.06)'}
+        },
+        x: { ticks:{font:{size:11}, autoSkip:false, maxRotation:45}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function buildOverviewChart(data) {
+  const ctx = document.getElementById('overviewChart');
+  if (ovChart) ovChart.destroy();
+  if (!data.length) return;
+  const avgs = MACHINES.map((_,i) => data.reduce((s,d)=>s+d.scores[i],0)/data.length);
+  ovChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: MACHINES.map(m => m.replace('機','')),
+      datasets: [{
+        data: avgs.map(v => +v.toFixed(2)),
+        backgroundColor: avgs.map(v => v>=4.5?'#C0DD97':v>=4?'#B5D4F4':v>=3?'#FAC775':'#F7C1C1'),
+        borderColor:     avgs.map(v => v>=4.5?'#27500A':v>=4?'#185FA5':v>=3?'#BA7517':'#A32D2D'),
+        borderWidth: 1.5, borderRadius: 5,
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{ callbacks:{ label: c => '平均 '+c.parsed.x.toFixed(2) } } },
+      scales: {
+        x: { min:1, max:5.3, ticks:{stepSize:1, callback:v=>(['','','待改進','中等','良好','優秀'][v]||''), font:{size:11}}, grid:{color:'rgba(0,0,0,0.06)'} },
+        y: { ticks:{font:{size:11}}, grid:{display:false} }
+      }
+    }
+  });
+}
+
+// ── Tabs & Grid ───────────────────────────────────────────────
+function renderMachineTabs(data) {
+  const row = document.getElementById('machine-tabs');
+  row.innerHTML = '';
+  MACHINES.forEach((m, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i===selectedMachine?' active':'');
+    btn.textContent = m.replace('機','');
+    btn.onclick = () => { selectedMachine = i; renderMachineTabs(data); buildMachineChart(data); };
+    row.appendChild(btn);
+  });
+}
+
+function renderGrid(data) {
+  const grid = document.getElementById('machine-grid');
+  grid.innerHTML = '';
+  if (!data.length) {
+    grid.innerHTML = '<div class="empty-state">這個時間範圍內沒有訓練紀錄</div>';
+    return;
+  }
+  data.forEach((row, si) => {
+    const card = document.createElement('div');
+    card.className = 'machine-card';
+    const dots = row.scores.map(s=>`<span class="dot dot-${s}">${s}</span>`).join('');
+    const avg  = (row.scores.reduce((a,b)=>a+b,0)/row.scores.length).toFixed(1);
+    card.innerHTML = `
+      <div class="machine-name">${row.date}（第 ${si+1} 次）</div>
+      <div class="machine-dots">${dots}</div>
+      <div class="machine-avg">12台平均：<span>${avg}</span></div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ── 統計卡 ────────────────────────────────────────────────────
+function renderStats(data, period) {
+  const n = data.length;
+  document.getElementById('stat-count').textContent = n;
+  const first = data[0]?.date, last = data[n-1]?.date;
+  document.getElementById('stat-range').textContent =
+    n===0 ? '無資料' : n===1 ? first : first+' – '+last;
+  document.getElementById('header-sub').textContent =
+    `${PERIOD_LABEL[period]} ‧ 共 ${n} 次訓練紀錄`;
+
+  if (!n) {
+    ['avg-accuracy','best-machine','worst-machine'].forEach(id=>document.getElementById(id).textContent='–');
+    document.getElementById('stat-acc-sub').textContent = '無資料';
+    return;
+  }
+  const accAvg = data.reduce((s,d)=>s+d.accuracy,0)/n;
+  document.getElementById('avg-accuracy').textContent  = accAvg.toFixed(1)+'%';
+  document.getElementById('stat-acc-sub').textContent  = n+'次平均';
+  const avgs = MACHINES.map((_,i)=>data.reduce((s,d)=>s+d.scores[i],0)/n);
+  document.getElementById('best-machine').textContent  = MACHINES[avgs.indexOf(Math.max(...avgs))].replace('機','');
+  document.getElementById('worst-machine').textContent = MACHINES[avgs.indexOf(Math.min(...avgs))].replace('機','');
+}
+
+// ── 主渲染 ────────────────────────────────────────────────────
+function render(period) {
+  const data = filterData(period);
+  renderStats(data, period);
+  buildAccuracyChart(data);
+  renderMachineTabs(data);
+  buildMachineChart(data);
+  buildOverviewChart(data);
+  renderGrid(data);
+}
+
+document.getElementById('time-filter').addEventListener('click', e => {
+  const btn = e.target.closest('.time-btn');
+  if (!btn) return;
+  document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentPeriod = btn.dataset.period;
+  selectedMachine = 0;
+  render(currentPeriod);
+});
+
+// 啟動
+loadData();
+</script>
+</body>
+</html>
