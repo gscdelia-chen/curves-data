@@ -206,9 +206,9 @@
     <div class="card">
       <div class="card-title-row">
         <div class="section-title">各器材平均分數總覽</div>
-        <div class="sort-toggle">
+        <div class="sort-toggle" id="sort-toggle">
           <button class="sort-btn active" data-sort="order">依器材順序</button>
-          <button class="sort-btn" data-sort="score">依表現好壞</button>
+          <button class="sort-btn" data-sort="score">依平均分數</button>
         </div>
       </div>
       <div class="chart-wrap" style="height: 380px;"><canvas id="overviewChart"></canvas></div>
@@ -232,20 +232,20 @@ const MACHINES_CSV_ORDER = [
   '腹背屈伸機','肩背推拉機','腿部推蹬機','軀體旋轉機','臀腿後踢機','胸肩前後機'
 ];
 
-// 顯示順序（含編號）— 依需求排列
+// 顯示順序 — label 為帶序號的顯示名稱，shortLabel 為不含序號的簡短名稱（用於頁籤）
 const DISPLAY_ORDER = [
-  { label:'腿部蹲舉',   csvName:'腿部蹲舉機' },
-  { label:'腰部側屈',   csvName:'腰部側屈機' },
-  { label:'髖內收外展', csvName:'髖內收外展機' },
-  { label:'手臂屈伸',   csvName:'手臂屈伸機' },
-  { label:'腿部推蹬',   csvName:'腿部推蹬機' },
-  { label:'胸背推拉',   csvName:'胸背推拉機' },
-  { label:'腹背屈伸',   csvName:'腹背屈伸機' },
-  { label:'肩背推拉',   csvName:'肩背推拉機' },
-  { label:'臀腿後踢',   csvName:'臀腿後踢機' },
-  { label:'軀體旋轉',   csvName:'軀體旋轉機' },
-  { label:'大腿屈伸',   csvName:'大腿屈伸機' },
-  { label:'胸肩前後',   csvName:'胸肩前後機' },
+  { label:'1.腿部蹲舉',   shortLabel:'腿部蹲舉',   csvName:'腿部蹲舉機' },
+  { label:'2.腰部側屈',   shortLabel:'腰部側屈',   csvName:'腰部側屈機' },
+  { label:'3.髖內收外展', shortLabel:'髖內收外展', csvName:'髖內收外展機' },
+  { label:'4.手臂屈伸',   shortLabel:'手臂屈伸',   csvName:'手臂屈伸機' },
+  { label:'5.腿部推蹬',   shortLabel:'腿部推蹬',   csvName:'腿部推蹬機' },
+  { label:'6.胸背推拉',   shortLabel:'胸背推拉',   csvName:'胸背推拉機' },
+  { label:'7.腹背屈伸',   shortLabel:'腹背屈伸',   csvName:'腹背屈伸機' },
+  { label:'8.肩背推拉',   shortLabel:'肩背推拉',   csvName:'肩背推拉機' },
+  { label:'9.臀腿後踢',   shortLabel:'臀腿後踢',   csvName:'臀腿後踢機' },
+  { label:'10.軀體旋轉',  shortLabel:'軀體旋轉',   csvName:'軀體旋轉機' },
+  { label:'11.大腿屈伸',  shortLabel:'大腿屈伸',   csvName:'大腿屈伸機' },
+  { label:'12.胸肩前後',  shortLabel:'胸肩前後',   csvName:'胸肩前後機' },
 ];
 
 // CSV 欄位索引對應（由 MACHINES_CSV_ORDER 決定）
@@ -464,7 +464,7 @@ function renderMachineTabs(data) {
   DISPLAY_ORDER.forEach((item, i) => {
     const btn = document.createElement('button');
     btn.className = 'tab-btn' + (i===selectedMachine?' active':'');
-    btn.textContent = item.label;
+    btn.textContent = item.shortLabel;
     btn.onclick = () => { selectedMachine = i; renderMachineTabs(data); buildMachineChart(data); };
     row.appendChild(btn);
   });
@@ -510,8 +510,8 @@ function renderStats(data, period) {
   document.getElementById('avg-accuracy').textContent  = accAvg.toFixed(1)+'%';
   document.getElementById('stat-acc-sub').textContent  = n+'次平均';
   const avgs = DISPLAY_ORDER.map((_,i) => data.reduce((s,d)=>s+d.scores[i],0)/n);
-  document.getElementById('best-machine').textContent  = DISPLAY_ORDER[avgs.indexOf(Math.max(...avgs))].label;
-  document.getElementById('worst-machine').textContent = DISPLAY_ORDER[avgs.indexOf(Math.min(...avgs))].label;
+  document.getElementById('best-machine').textContent  = DISPLAY_ORDER[avgs.indexOf(Math.max(...avgs))].shortLabel;
+  document.getElementById('worst-machine').textContent = DISPLAY_ORDER[avgs.indexOf(Math.min(...avgs))].shortLabel;
 }
 
 // ── 主渲染 ────────────────────────────────────────────────────
@@ -536,8 +536,8 @@ document.getElementById('time-filter').addEventListener('click', e => {
   render(currentPeriod);
 });
 
-// ── 事件：排序切換 ────────────────────────────────────────────
-document.querySelector('.sort-toggle').addEventListener('click', e => {
+// ── 事件：排序切換（用 document 委派，避免 display:none 時綁定失敗）
+document.addEventListener('click', e => {
   const btn = e.target.closest('.sort-btn');
   if (!btn) return;
   document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
